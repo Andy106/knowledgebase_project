@@ -1,0 +1,148 @@
+Experiments with ECS Series-Topic 1: Deploy 1 application to ECS and expose the same using 1 ALB with a custom domain name
+Anand Sharma
+Anand Sharma
+
+5 min read
+·
+Jun 3
+1
+
+
+
+
+
+
+Preface
+This is the first article in this series documenting my experiments with the AWS Elastic Container Service (ECS). It has the links to the code & data used in the remaining articles in the series. Plus, provides an understanding of the overall setup used for testing.
+
+Code & data available at — https://github.com/Andy106/ecs-experiments-series/tree/master
+
+Target End State
+Services setup -
+
+
+AWS architecture -
+
+
+NOTE — One can also choose to run the ECS Fargate tasks in a Private subnet
+
+Ref URL — https://repost.aws/knowledge-center/ecs-fargate-tasks-private-subnet
+
+Step by Step Process
+Step 1 — Create a flask application that talks to a Postgres database deployed locally
+
+Ref URL — https://www.freecodecamp.org/news/rest-api-best-practices-rest-endpoint-design-examples/
+
+Test the application locally —
+
+
+Step 2 — Dockerize the application and run containers locally
+
+Used instructions available at the reference URL below -https://www.freecodecamp.org/news/how-to-dockerize-a-flask-app/
+
+To connect to the localhost postgresDB, switched to ‘host.docker.internal’
+
+NOTE — Had issues while dockerizing with the flask version I was using in my local IDE. After checking the below page, decide to remove the explicit flask version from requirements.txt
+
+https://stackoverflow.com/questions/71718167/importerror-cannot-import-name-escape-from-jinja2
+
+NOTE — Had issues building docker image with psycopg2. Hence, switched to psycopg2-binary in requirements.txt
+
+app.py -
+
+from flask import Flask, abort, jsonify
+import psycopg2
+
+app = Flask(__name__)
+
+myconn = psycopg2.connect(database = "DataWarehouseX", user = "postgres", password = "xxxx", host = "host.docker.internal", port = "5432")
+mycursor = myconn.cursor()
+Tested the dockerized application locally -
+
+
+Step 3 — Create a RDS postgres database, load data into it, switch to using it in your rest API application
+
+Ref URL — https://sakyasumedh.medium.com/deploy-backend-application-to-aws-ecs-with-application-load-balancer-step-by-step-guide-part-1-91935ae93c51
+
+NOTE — Had to create a Public database so that can connect to it from my laptop and load data. Plus also connect to it from my dockerized rest API application on my local machine
+
+Ref URL — https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_ConnectToPostgreSQLInstance.html
+
+Steps followed to load data in the RDS database —
+
+3.1 Exported data from local database table into a CSV file
+
+3.2 Imported data from CSV file into RDS database table
+
+NOTE — Connection from container to WWW works out of the box
+
+Hence, only had to make the following change to the app.py file -
+
+myconn = psycopg2.connect(database = "DataWarehouseX", user = "postgres", password = "xxxx", host = "rest-ecs-db.c6nvu354y8s3.us-east-1.rds.amazonaws.com", port = "5432")
+Also had to fix the inbound rule for the RDS database instance to allow inbound connection from anywhere on port 5432
+
+Tested the dockerized application locally. Still worked fine (touchwood!).
+
+Step 4 — Create an ECR repo and push images to that repo
+
+Ref URL — https://sakyasumedh.medium.com/deploy-backend-application-to-aws-ecs-with-application-load-balancer-step-by-step-guide-part-2-e81d4daf0a55
+
+Created a public ECR repo.
+
+NOTE — I ran AWS configure in Visual Studio terminal in the same folder where the image file existed. Then followed the push commands specified in the ECR console.
+
+Step 5 — Setup ECS cluster and deploy application to ECS
+
+Ref URLs—
+
+https://sakyasumedh.medium.com/deploy-backend-application-to-aws-ecs-with-application-load-balancer-step-by-step-guide-part-3-b8125ca27177
+
+https://towardsthecloud.com/amazon-ecs-task-role-vs-execution-role
+
+Did not need to specify an ECS Task Role. Created a new Task Execution Role.
+
+NOTE — Had to expose port 5000.
+
+NOTE — Had trouble connecting from ECS containers to RDS Postgres database. Deduced that from the logs (see screenshot below). Had to modify RDS Security Group to allow traffic on port 5432 from anywhere (could also have changed it to the ECS service’s Security Group).
+
+
+Tested with the Public IP address of the Task. Worked fine.
+
+
+Step 6 — Add an Application Load Balancer (ALB)
+
+Ref URL — https://sakyasumedh.medium.com/setup-application-load-balancer-and-point-to-ecs-deploy-to-aws-ecs-fargate-with-load-balancer-4b5f6785e8f
+
+NOTE — Had to expose port 5000 everywhere (in ALB Listener, in Target Group etc.)
+
+Tested. Continues to work fine!
+
+
+Step 7 — Add a custom domain name
+
+Ref URL- https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-to-elb-load-balancer.html
+
+NOTE — Had to register a domain. That will automatically create a public hosted zone.
+
+Tried two different approaches for creating a custom domain name —
+
+7.1 Creating a CNAME record like
+
+api.anandmusings.link pointing to the alb — rest-ecs-rds-alb-445658067.us-east-1.elb.amazonaws.com worked
+
+
+7.2 Creating an ALIAS record pointing to the ALB
+
+NOTE — Alias record didn’t work initially for some reason. Deleted a few times and created afresh. And then that too started working
+
+
+Previous URL — N/A
+
+Next URL — Experiments with ECS Series — Topic 2: Using a Network Load Balancer (NLB) to expose 2 ECS services externally
+
+1
+
+
+
+
+

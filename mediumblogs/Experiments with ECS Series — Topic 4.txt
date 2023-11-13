@@ -1,0 +1,73 @@
+Experiments with ECS Series — Topic 4: Leveraging an internal load balancer for inter-service communication
+Anand Sharma
+Anand Sharma
+
+2 min read
+·
+Jun 2
+1
+
+
+
+
+
+
+Preface
+The advantage of using an internal load balancer for inter-service communication is the sheer simplicity of the architecture.
+
+The disadvantage is cost — transactions via the load balancers can rapidly lead to increased cost of communication.
+
+Here are some nice articles to find out more about this approach -
+
+Ref URLs —
+
+Networking between Amazon ECS services in a VPC
+Using Amazon ECS containers in a VPC, you can split monolithic applications into separate parts that can be deployed…
+docs.aws.amazon.com
+
+https://towardsaws.com/ecs-service-communication-using-an-internal-load-balancer-919c7406389
+
+Target End State
+
+A representative picture of the internals -
+
+
+Source URL — https://docs.aws.amazon.com/AmazonECS/latest/bestpracticesguide/networking-connecting-services.html
+
+Step by Step Process
+Step 1 — Create an ‘internal’ Application Load Balancer (ALB)
+
+Step 2 — Map the ALB to the payments service while deploying the same
+
+Step 3 — Use the payments service ALB endpoint in the products service code and then deploy the products service
+
+products service code:
+
+app.py -
+
+import requests
+
+@app.route("/api/1.0/payments")
+def payments_view():
+    try:
+        response = requests.get("http://internal-payment-lb-170948061.us-east-1.elb.amazonaws.com:5000/metaapi/1.0/payments")
+        return response.text
+    except:
+        abort(404)
+Ref URL — https://stackoverflow.com/questions/25149493/how-to-call-another-webservice-api-from-flask
+
+NOTE — Could have used a better exceptions handling approach — https://stackoverflow.com/questions/16511337/correct-way-to-try-except-using-python-requests-module
+
+NOTE — Could have chosen to use a custom domain name for payments service and use that in the code base to use a more well defined URL
+
+Step 4 — Test
+
+Accessing products service -
+
+
+Accessing payments service via products service -
+
+
+Previous URL —Experiments with ECS Series-Topic 3: Approaches available for inter-service communication in ECS
+
+Next URL — Experiments with ECS Series-Topic 5: Leveraging Service Discovery to enable inter-service communication

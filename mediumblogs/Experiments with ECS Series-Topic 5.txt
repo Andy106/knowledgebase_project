@@ -1,0 +1,90 @@
+Experiments with ECS Series-Topic 5: Leveraging Service Discovery to enable inter-service communication
+Anand Sharma
+Anand Sharma
+
+3 min read
+·
+Jun 2
+
+
+
+
+
+Preface
+This approach uses AWS Cloud Map internally.
+
+This approach is preferable to using internal Application Load Balancers as communication via ALBs can become fairly expensive over time.
+
+However, the main disadvantage of using service discovery is that you must implement extra logic to have retries and deal with connection failures. DNS records have a time-to-live (TTL) period that controls how long they are cached for. It takes some time for the DNS record to be updated and for the cache to expire so that your applications can pick up the latest version of the DNS record. So, your application might end up resolving the DNS record to point at another container that’s no longer there. Your application needs to handle retries and have logic to ignore bad backends.
+
+Source URL — https://docs.aws.amazon.com/AmazonECS/latest/bestpracticesguide/networking-connecting-services.html
+
+Here are a few websites I found that explain Service Discovery and how to implement it in greater detail -
+
+Ref URLs -
+
+https://aws.amazon.com/blogs/aws/amazon-ecs-service-discovery/
+
+https://github.com/ranman/ecs-service-discovery-demo/blob/master/backend/app.py
+
+https://medium.com/the-aws-coder/using-aws-ecs-service-discovery-for-communication-between-microservices-in-net-c-550e406a8b71
+
+Target End State
+
+A representative picture of the internals -
+
+
+Source URL — https://docs.aws.amazon.com/AmazonECS/latest/bestpracticesguide/networking-connecting-services.html
+
+Step by Step Process
+Step 1 — Deploy payments service (the service I will NOT be exposing directly outside the cluster)
+
+While deploying, enable Service Discovery
+
+NOTE — Service Discovery is only supported via the Classic Console
+
+Ref URL — https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-discovery.html
+
+Representative screenshots -
+
+
+
+NOTE — I used ‘local’ as Service Discovery namespace name. And ‘payment-service’ as the Service Discovery name
+
+Deployed service -
+
+
+AWS Cloud Map -
+
+
+Route 53 -
+
+
+Step 2 — Deploy products service (the one I will be exposing directly outside the cluster)
+
+Use payment service’s private DNS name for connectivity
+
+products service:
+
+app.py -
+
+@app.route("/api/1.0/payments")
+def payments_view():
+    try:
+        response = requests.get("http://payment-service.local:5000/metaapi/1.0/payments")
+        return response.text
+    except:
+        abort(404)
+NOTE — I picked the DNS name from Route 53
+
+Step 3 — Test the setup
+
+Accessing the products service -
+
+
+Accessing the payments service via the products service -
+
+
+Previous URL —Experiments with ECS Series — Topic 4: Leveraging an internal load balancer for inter-service communication
+
+Next URL — Experiments with ECS Series — Topic 6: Leveraging App Mesh to enable inter-service communication

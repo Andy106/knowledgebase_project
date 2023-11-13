@@ -1,0 +1,216 @@
+Experiments with ECS Series — Topic 6: Leveraging App Mesh to enable inter-service communication
+Anand Sharma
+Anand Sharma
+
+7 min read
+·
+Jun 1
+
+
+
+
+
+Preface
+The documentation available to use App Mesh to enable inter-service communication in an ECS cluster seems not very intuitive to follow. I am hoping that capturing my experience here will help someone in future.
+
+I did find using the App Mesh to conduct inter-service communication a fairly heavy handed way to go about things. I would suggest that unless you really need the extra observability provided by the Service Mesh or the Dynamic Routing capabilities (to enable canary deployments), you are better off using one of the other simpler approaches for inter-service communication.
+
+The setup / code / data I have used in this experiment have been documented in the previous parts of this series. Please refer the same for more details.
+
+Here are 2 nice videos I came across describing what is a Service Mesh and how AWS App Mesh works. Would strongly recommend reviewing the same to get a broader idea of the various constructs involved.
+
+AWS Summit 2019 — Anaheim: Introduction to AWS App Mesh (MAD301)
+
+Running microservices in Amazon EKS with AWS App Mesh.
+
+A screenshot from Video 1 -
+
+
+A screenshot from Video 2 -
+
+
+Target End State
+
+Step by Step Process
+Step 1 — Create a namespace called ‘local’ in AWS Cloud Map and define services underneath that
+
+
+Define the payments service -
+
+NOTE — This is a service NOT a service instance (the latter gets mapped when deploying the service in ECS)
+
+
+The products service was defined in a similar way as well.
+
+Step 2 — Create an App Mesh
+
+Define a mesh called ‘local-mesh’
+
+Define a virtual service for payment service (service that will be called).
+
+Use the planned service discovery name as the virtual service name.
+
+Do not need to specify a backend.
+
+
+
+
+Enabled traffic on port 5000
+
+
+Define a payment service router.
+
+NOTE — I could have alternatively chosen to route the traffic directly to a virtual node from a virtual service and not used a service router in the middle
+
+
+Setup a route to route all the traffic to a single virtual node.
+
+NOTE — The target port was set to 5000 later on (does not show that way in the screenshot).
+
+
+
+Step 3 — Do a similar setup for products service (service that will call) under the mesh created earlier
+
+NOTE -
+
+3.1 This service will have the payments service defined as the back end.
+
+3.2 There seems to no workflow based mechanism available to create the relevant objects for a second service inside an already created mesh. Had to manually follow the approach: Create virtual node > Create virtual router > Create virtual service
+
+3.3 Could not select products service from the AWS Cloud Map drop down. Had to manually type it
+
+3.4 When creating virtual router, did not get the option to specify the route. Had to open the Virtual router once it was created and add the route
+
+Virtual node -
+
+
+
+
+Virtual router -
+
+
+
+
+Virtual Service -
+
+
+Step 4 — Setup a virtual gateway. And add gateway routes for the payment and products virtual services.
+
+This is needed to access these services from outside the cluster.
+
+
+
+NOTE — While defining the routes, I had to overwrite and remove the prefix rewrite option
+
+Ref URL — https://docs.aws.amazon.com/app-mesh/latest/userguide/gateway-routes.html#create-gateway-route
+
+The screenshot shows only the configuration for the /api. A similar setup was done for /metaapi as well.
+
+
+Step 5 — Modify the payment service task definition to enable App Mesh integration. Then, use the old ECS Console experience and deploy payment service
+
+NOTE -
+
+5.1 Add app mesh integration to Task Definition
+
+5.1 Do not enable any load balancer
+
+5.2 Enable Service Discovery integration
+
+5.4 Confirm using the Task Public IP address that the service is working as expected
+
+Modifying the Task Definition -
+
+
+Deploying the service -
+
+
+
+The first deployment I tried actually did not work.
+
+The key was I had to use an ECS Task role with the Policy — AWSAppMeshEnvoyAccess
+
+
+The deployment worked post that -
+
+
+Ref URL — https://docs.aws.amazon.com/app-mesh/latest/userguide/getting-started-ecs.html
+
+Ref URL — https://docs.aws.amazon.com/app-mesh/latest/userguide/proxy-authorization.html
+
+Step 6 — Modify the product service code to use an environment variable to call the payment service
+
+Ref URL — https://stackoverflow.com/questions/49770999/docker-env-for-python-variables
+
+Test this change out locally first
+
+NOTE — I did not specify any environment variable in the Dockerfile as I didn’t want to give a default value to the same and docker build did not seem to work without providing a default value to the environment variable in the Dockerfile.
+
+products service:
+
+app.py code -
+
+@app.route("/api/1.0/payments")
+def payments_view():
+    try:
+        PAYMENT_ENDPOINT = os.environ['PAYMENT_ENDPOINT']
+        response = requests.get(PAYMENT_ENDPOINT)
+        return response.text
+    except:
+        abort(404)
+
+Used docker run command to test changes locally -
+
+docker run -e PAYMENT_ENDPOINT=”http://in.rediff.com" -p 5000:5000 python-docker
+
+Output -
+
+
+Step 7 — Use the old ECS Console experience and deploy the products service
+
+7.1 Build the new image and upload to ECR
+
+7.2 Add the environment variable — PAYMENT_ENDPOINT in the task definition
+
+7.3 Enable Appmesh in task definition
+
+7.4 Do not enable any load balancer
+
+7.5 Enable Service Discovery integration.
+
+7.6 Confirm using the Task Public IP address that the service is working as expected
+
+Step 7 — Test
+
+After deploying the products service, I was able to confirm that the Service to Service connectivity is working fine
+
+
+Accessing payments service via products service -
+
+
+Step 8 — Setup a NLB and point it to the virtual gateway
+
+This enables one to expose multiple services running an ECS cluster to the external world without either having to use multiple listeners on different ports (in case of a NLB) or having to use host based / path based routing (in case of ALB)
+
+8.1 Create a task definition without manually specifying any containers pointing to the virtual gateway. This will automatically add an envoy container to the task definition.
+
+8.2 Setup a service with an NLB using the above mentioned task definition. NOTE — An ALB did not seem to work. HTTP based Health checks would continue to fail. The NLB allowed using a TCP based Health Check
+
+Task definition -
+
+
+NLB Target Group -
+
+
+Accessing the Payments service via NLB -
+
+
+Accessing the products service via products service using the NLB -
+
+
+Accessing the products service using the NLB -
+
+
+Previous URL — Experiments with ECS Series-Topic 5: Leveraging Service Discovery to enable inter-service communication
+
+Next URL — Experiments with ECS Series — Topic 7: Leveraging AWS X Ray to observe inter-service communication

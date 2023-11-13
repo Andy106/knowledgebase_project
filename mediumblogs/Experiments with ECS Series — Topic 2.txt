@@ -1,0 +1,76 @@
+Experiments with ECS Series — Topic 2: Using a Network Load Balancer (NLB) to expose 2 ECS services externally
+Anand Sharma
+Anand Sharma
+
+3 min read
+·
+Jun 3
+
+
+
+
+
+Preface
+I will explain in this article how one can use a single NLB to expose more than 1 ECS service to the outside world.
+
+You can always use a NLB for each ECS service you deploy. However, that could prove fairly expensive over time. Plus, force the users to have to query multiple different end points.
+
+If you are intend to use a single Application Load Balancer, that works as well. You will have to use either Host based or Path based routing in that case.
+
+Ref URLs—
+
+New - Host-Based Routing Support for AWS Application Load Balancers | Amazon Web Services
+Last year I told you about the new AWS Application Load Balancer (an important part of Elastic Load Balancing) and…
+aws.amazon.com
+
+Using AWS Application Load Balancer path-based routing to combine Amazon ECS launch types | Amazon…
+AWS container services offer broad choice and flexibility of tools to run containers. This provides customers with the…
+aws.amazon.com
+
+NOTE — ALBs seem to offer far greater flexibility that ALBs. However, using a NLB over an ALB might be preferable at times as they can support higher throughput and cost a bit lesser.
+
+Target End State
+
+Significant Callouts
+Using a single Target Group and Listener does not work as when I hit the NLB, the query randomly gets routed to 1 of the Tasks. If the query is for Data endpoint and the Task the NLB routes to is for Data service, we will see a data response. However, if the query is for the Metadata endpoint and the NLB has still routed the query to the Data Service Task, we will get a 404 (Not Found).
+2. What worked?
+
+Using 2 Listeners — 1 for Port 5000 and another for Port 5001.
+
+And mapping them to two different Target Groups (both using Port 5000 as the communication to the Tasks is still on Port 5000).
+
+Listeners:
+
+
+Target Groups:
+
+
+
+Map the specific Listener and Target Group to the relevant service while deploying the same
+
+payments service:
+
+
+A similar setup was done for products service as well
+
+3. I could avoid having to specify the port name in the URL by either -
+
+a. Using the default ports in the service for HTTP (80) and HTTPS (443)
+
+b. Setup the listener to the ports 80 or 443 and point them to the relevant ports within the Target Group
+
+Yet to understand what do I do if I have 2 services and 1 NLB though.
+
+An example of # 2 in action:
+
+The setup -
+
+
+Did not need to specify a port name while accessing the service -
+
+
+Ref URL — https://stackoverflow.com/questions/56206281/how-to-map-a-url-with-port-number-through-amazon-route-53
+
+Previous URL — Experiments with ECS Series-Topic 1: Deploy 1 application to ECS and expose the same using 1 ALB and a custom domain name
+
+Next URL — Experiments with ECS Series-Topic 3: Approaches available for inter-service communication in ECS

@@ -1,0 +1,28 @@
+Experiments with ECS Series-Topic 3: Approaches available for inter-service communication in ECS
+Anand Sharma
+Anand Sharma
+
+Jun 2
+
+
+
+
+
+There are 4 options available for inter-service communication in ECS -
+
+Use an Internal Load Balancer
+Use Service Discovery
+Use a Service Mesh
+Use Service Connect
+Ref URL -
+
+https://docs.aws.amazon.com/AmazonECS/latest/bestpracticesguide/networking-connecting-services.html
+
+Previous URL — Experiments with ECS Series — Topic 2: Using a Network Load Balancer (NLB) to expose 2 ECS services externally
+
+Next URL — Experiments with ECS Series — Topic 4: Leveraging an internal load balancer for inter-service communication
+
+
+
+
+

@@ -1,0 +1,145 @@
+Experiments with ECS Series — Topic 7: Leveraging AWS X Ray to observe inter-service communication
+Anand Sharma
+Anand Sharma
+
+4 min read
+·
+Jun 1
+
+
+
+
+
+Preface
+Just like the rest of the AWS App Mesh documentation, the information available to enable AWS X Ray to observe inter-service communication in an ECS cluster also does seem to be very intuitive to follow. I am hoping that capturing my experience here will help someone in future.
+
+The setup / code / data I have used in this experiment have been documented in the previous parts of this series. Please refer the same for more details.
+
+Here’s a nice video I came across describing how to improve overall observability while using App Mesh for inter-service communication in an ECS cluster
+
+
+Target End State
+A representative picture of the internals -
+
+
+Source URL — https://medium.com/swlh/x-ray-vision-fbeee441748
+
+Excerpt — This implies that we must send traces to X-Ray API every time there is a request in the system, having a potential of adding an unnecessary overhead. The way that AWS solves this problem is by introducing a notion of an X-Ray Daemon. X-Ray Daemon is a process that runs along side your service. The job of X-Ray Daemon is to collect the traces and send them to the API in a performant manner. Instead of sending an http request to an X-Ray API in a service, the instrumentation will report tracing info to the daemon using a lighter protocol (UDP) and that daemon in turn handles reporting to X-Ray API in an optimal manner.
+
+Step by Step Process
+Step 1 — Add X Ray code in the Flask application and build & upload the image
+
+Add AWS X Ray SDK to requirements.txt:
+
+aws_xray_sdk
+
+Modify app.py to start capturing metrics and send the same to X Ray daemon:
+
+from flask import Flask, abort, jsonify
+import psycopg2
+import requests
+import os
+from aws_xray_sdk.core import xray_recorder
+from aws_xray_sdk.ext.flask.middleware import XRayMiddleware
+
+app = Flask(__name__)
+
+xray_url = os.getenv("AWS_XRAY_URL")
+xray_recorder.configure(service='products_service', dynamic_naming=xray_url)
+XRayMiddleware(app, xray_recorder)
+
+myconn = psycopg2.connect(database = "DataWarehouseX", user = "postgres", password = "XXX", host = "rds-db.c6nvu354y8s3.us-east-1.rds.amazonaws.com", port = "5432")
+mycursor = myconn.cursor()
+
+@app.route("/")
+def hello_world():
+    return 'Hello from docker!'
+
+@app.route("/api/1.0/payments")
+@xray_recorder.capture('payments_endpoint')
+def payments_view():
+    try:
+        PAYMENT_ENDPOINT = os.environ['PAYMENT_ENDPOINT']
+        response = requests.get(PAYMENT_ENDPOINT)
+        return response.text
+    except:
+        abort(404)
+
+@app.route("/api/1.0/products")
+@xray_recorder.capture('products_endpoint')
+def products_view():
+    try:
+        global mycursor
+        mycursor.execute("SELECT * FROM core.dim_product")
+        db=[]
+        for x in mycursor:
+            db.append(x)        
+        return jsonify(db)
+    except IndexError:
+        abort(404)
+NOTE:
+
+We will be using the default sampling rate. So did not create a sampling rule file.
+
+Ref URLs -
+
+https://docs.aws.amazon.com/xray/latest/devguide/xray-sdk-python-middleware.html#xray-sdk-python-adding-middleware-flask
+
+Distributed Tracing with AWS X-Ray in Flask Application
+This article describes the steps to add AWS X-Ray for distributed tracing in a containerized Flask application.
+binli.hashnode.dev
+
+Step 2 — Add AWS X Ray Daemon access to the ECS Task Role
+
+To allow the X Ray Daemon running in the side car to relay data to AWS X RAY API
+
+
+Ref URL — https://medium.com/swlh/x-ray-vision-fbeee441748
+
+Step 3 — Task definition changes
+
+3.1 Add a X Ray daemon container as a side car in the Task definition of the relevant service
+
+
+Ref URL — https://docs.aws.amazon.com/xray/latest/devguide/xray-daemon-ecs.html
+
+3.2 Add an environment variable to the main service container (products service) to allow connectivity to the X Ray Daemon container.
+
+
+Ref URL — https://docs.aws.amazon.com/xray/latest/devguide/xray-daemon-ecs.html
+
+3.3 Add an environment variable — ENABLE_ENVOY_XRAY_TRACING and set its value to 1 in the envoy container to allow it to connect with the X Ray Daemon
+
+
+Ref URL -
+
+https://aws.amazon.com/blogs/compute/integrating-aws-x-ray-with-aws-app-mesh/
+
+https://docs.aws.amazon.com/xray/latest/devguide/xray-services-appmesh.html
+
+Should have ideally instrumented the database connectivity as well. See the below reference URLs for more information.
+
+Ref URLs -
+
+https://docs.aws.amazon.com/xray/latest/devguide/xray-sdk-python.html
+
+Patching libraries to instrument downstream calls
+Instrument libraries with the X-Ray SDK for Python to trace downstream calls to AWS services, SQL databases, and other…
+docs.aws.amazon.com
+
+Step 4 — Deploy the ECS services (focusing on only products service for now)
+
+It worked!
+
+
+Made the changes to the payments service task definition as well and deployed the same
+
+
+Previous URL — Experiments with ECS Series — Topic 6: Leveraging App Mesh to enable inter-service communication
+
+Next URL — N/A
+
+
+
+
+
