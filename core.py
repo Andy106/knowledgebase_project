@@ -14,7 +14,7 @@ load_dotenv()
 openai_api_key = os.getenv('OPENAI_API_KEY')
 
 pinecone.init(
-    api_key="5276d92e-17bc-46d5-865d-86977a64a8de",
+    api_key="*****",
     environment="gcp-starter",
 )
 
@@ -29,5 +29,9 @@ qa = VectorDBQA.from_chain_type(
 
 query = "Which service can I use to observe inter service communication in an ECS cluster?"
 result = qa({"query": query})
+<<<<<<< HEAD
 print(result)
 #print(result['result'])
+=======
+print(result['result'])
+>>>>>>> 1d98f25f5bca6a998f9dec2705137fe7edee9879

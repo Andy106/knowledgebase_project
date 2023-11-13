@@ -15,7 +15,7 @@ load_dotenv()
 openai_api_key = os.getenv('OPENAI_API_KEY')
 
 pinecone.init(
-    api_key="5276d92e-17bc-46d5-865d-86977a64a8de",
+    api_key="******",
     environment="gcp-starter",
 )
 
