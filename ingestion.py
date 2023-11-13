@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 
 from langchain.document_loaders import TextLoader
 from langchain.text_splitter import CharacterTextSplitter
@@ -17,10 +18,15 @@ pinecone.init(
     api_key="5276d92e-17bc-46d5-865d-86977a64a8de",
     environment="gcp-starter",
 )
-  
+
+# Create dictionary of source URLs
+df = pd.read_csv("C:\\D Drive\\Software Engineering\\LLM\\knowledgebase_project\\source.csv")
+dict1 = dict(df.values)
+
+# Reading text files from the directory
 directory = 'C:\\D Drive\\Software Engineering\\LLM\knowledgebase_project\\mediumblogs'
- 
-# iterate over files in that directory
+
+
 for root, dirs, files in os.walk(directory):
     for filename in files:
         f = os.path.join(root, filename)
@@ -28,11 +34,14 @@ for root, dirs, files in os.walk(directory):
         loader = TextLoader(f, encoding = 'UTF-8')
         document = loader.load()
 
-        # print(document)
-
         text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
         texts = text_splitter.split_documents(document)
-        print(len(texts))
+
+        for doc in texts:
+            new_url = dict1[filename]
+            doc.metadata.update({"source": new_url})
+
+        print(f"Going to add {len(texts)} documents to Pinecone")
 
         embeddings = OpenAIEmbeddings(openai_api_key=openai_api_key)
 

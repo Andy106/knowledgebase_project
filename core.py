@@ -29,4 +29,5 @@ qa = VectorDBQA.from_chain_type(
 
 query = "Which service can I use to observe inter service communication in an ECS cluster?"
 result = qa({"query": query})
-print(result['result'])
+print(result)
+#print(result['result'])
